@@ -36,18 +36,24 @@ firebase/    Firestore rules + a Cloud Function for vote aggregation
 
 ## 2. Deploy the backend
 
-Requires the [Firebase CLI](https://firebase.google.com/docs/cli)
-(`npm install -g firebase-tools`).
+`firebase-tools` is a local dev dependency of `firebase/`, so no global
+install is needed — everything runs through `npm run` via `npx`.
 
 ```sh
 cd firebase
-firebase login
-# replace the placeholder project id in .firebaserc, or run:
-firebase use --add
+npm install
+npm run login            # opens a browser for firebase login
+npm run use               # pick/link your Firebase project (or edit .firebaserc by hand)
 
 cd functions && npm install && cd ..
-firebase deploy --only firestore:rules,functions
+npm run deploy            # deploys Firestore rules + the aggregation function
 ```
+
+Other scripts available in `firebase/package.json`:
+
+- `npm run deploy:rules` — Firestore rules only
+- `npm run deploy:functions` — Cloud Functions only
+- `npm run emulators` — run Firestore + Functions locally for testing
 
 ## 3. Configure the extension
 
