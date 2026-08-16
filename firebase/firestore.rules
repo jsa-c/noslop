@@ -1,0 +1,26 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Aggregate stats per video. Publicly readable so anyone can see the
+    // slop score without signing in. Only the Cloud Function (Admin SDK,
+    // which bypasses rules) is allowed to write these — clients can never
+    // tamper with the counts directly.
+    match /videos/{videoId} {
+      allow read: if true;
+      allow write: if false;
+
+      // One vote document per authenticated (anonymous) user per video.
+      // Users may only read/write their own vote.
+      match /votes/{uid} {
+        allow read: if true;
+        allow create, update: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.isSlop is bool
+          && request.resource.data.keys().hasOnly(['isSlop', 'votedAt', 'videoTitle']);
+        allow delete: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+}

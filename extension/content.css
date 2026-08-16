@@ -1,0 +1,85 @@
+#noslop-widget {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: 220px;
+  background: #0f0f0f;
+  color: #fff;
+  border: 1px solid #3d3d3d;
+  border-radius: 10px;
+  font-family: Roboto, Arial, sans-serif;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+#noslop-widget .noslop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #212121;
+  cursor: default;
+}
+
+#noslop-widget .noslop-title {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+#noslop-widget .noslop-collapse {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+#noslop-widget .noslop-collapse:hover {
+  color: #fff;
+}
+
+#noslop-widget .noslop-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#noslop-widget.noslop-collapsed .noslop-body {
+  display: none;
+}
+
+#noslop-widget .noslop-count {
+  font-size: 12px;
+  color: #ccc;
+}
+
+#noslop-widget .noslop-toggle {
+  background: #272727;
+  color: #fff;
+  border: 1px solid #4d4d4d;
+  border-radius: 18px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+#noslop-widget .noslop-toggle:hover:not(:disabled) {
+  background: #3d3d3d;
+}
+
+#noslop-widget .noslop-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#noslop-widget .noslop-toggle.noslop-active {
+  background: #ff4e45;
+  border-color: #ff4e45;
+  color: #fff;
+}

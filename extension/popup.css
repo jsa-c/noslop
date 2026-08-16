@@ -1,0 +1,62 @@
+body {
+  width: 260px;
+  margin: 0;
+  font-family: Roboto, Arial, sans-serif;
+  background: #0f0f0f;
+  color: #fff;
+}
+
+header {
+  padding: 12px 14px;
+  background: #212121;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+main {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#status,
+.video-title {
+  font-size: 12px;
+  color: #ccc;
+  margin: 0;
+  word-break: break-word;
+}
+
+.count {
+  font-size: 13px;
+}
+
+button {
+  background: #272727;
+  color: #fff;
+  border: 1px solid #4d4d4d;
+  border-radius: 18px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #3d3d3d;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button.active {
+  background: #ff4e45;
+  border-color: #ff4e45;
+}

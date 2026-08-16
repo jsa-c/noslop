@@ -1,0 +1,79 @@
+# NoSlop
+
+A Chrome extension that lets users flag YouTube videos as **slop**
+(low-effort / AI-generated content) and see how many other users agree.
+Votes are backed by Firebase (Firestore + a Cloud Function that keeps the
+public counts in sync).
+
+```
+extension/   Chrome MV3 extension (content script, popup, background worker)
+firebase/    Firestore rules + a Cloud Function for vote aggregation
+```
+
+## How it works
+
+- Each anonymous user (via Firebase Anonymous Auth) can cast one vote per
+  video: `videos/{videoId}/votes/{uid}` → `{ isSlop: true }`.
+- Users can only read/write their own vote document — enforced by
+  `firebase/firestore.rules`.
+- A Cloud Function (`firebase/functions/index.js`) listens for vote writes
+  and recomputes `videos/{videoId}.slopCount` / `.totalVotes`. Clients can
+  only *read* that aggregate doc, never write it, so nobody can fake the
+  public score.
+- The extension talks to Firebase over its plain REST APIs (Identity
+  Toolkit + Firestore) from the background service worker — no bundler
+  required, and the Web API key is safe to ship since it doesn't grant any
+  access on its own (the security rules do that).
+
+## 1. Set up the Firebase project
+
+1. Create a project at https://console.firebase.google.com.
+2. **Build → Authentication → Sign-in method** → enable **Anonymous**.
+3. **Build → Firestore Database** → create a database (production mode is
+   fine; the rules below control access).
+4. **Project settings → General → Your apps** → add a **Web app** and copy
+   its `apiKey` and `projectId`.
+
+## 2. Deploy the backend
+
+Requires the [Firebase CLI](https://firebase.google.com/docs/cli)
+(`npm install -g firebase-tools`).
+
+```sh
+cd firebase
+firebase login
+# replace the placeholder project id in .firebaserc, or run:
+firebase use --add
+
+cd functions && npm install && cd ..
+firebase deploy --only firestore:rules,functions
+```
+
+## 3. Configure the extension
+
+Edit `extension/config.js` with the values from step 1:
+
+```js
+export const FIREBASE_CONFIG = {
+  apiKey: "...",
+  projectId: "...",
+};
+```
+
+## 4. Load the extension in Chrome
+
+1. Go to `chrome://extensions`.
+2. Enable **Developer mode** (top right).
+3. Click **Load unpacked** and select the `extension/` folder.
+4. Open any `youtube.com/watch?v=...` video — a small **NoSlop** widget
+   appears in the bottom-right corner. Click the extension icon in the
+   toolbar for the same controls in a popup.
+
+## Notes / next steps
+
+- Identity is anonymous-only for a frictionless MVP; votes are tied to a
+  device-local Firebase UID, not a Google account.
+- Icons in `extension/icons/` are placeholder generated art — swap in real
+  branding before publishing to the Chrome Web Store.
+- To publish, zip the `extension/` folder and upload it via the
+  [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
