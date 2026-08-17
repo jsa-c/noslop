@@ -42,6 +42,16 @@ function renderVideo(videoId, videoTitle, { stats, myVote }) {
   });
 }
 
+async function initSettings() {
+  const toggle = document.getElementById("auto-skip-toggle");
+  const { autoSkipEnabled } = await chrome.storage.sync.get({ autoSkipEnabled: false });
+  toggle.checked = autoSkipEnabled;
+
+  toggle.addEventListener("change", () => {
+    chrome.storage.sync.set({ autoSkipEnabled: toggle.checked });
+  });
+}
+
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const videoId = tab?.url ? getVideoIdFromUrl(tab.url) : null;
@@ -61,3 +71,4 @@ async function init() {
 }
 
 init();
+initSettings();
