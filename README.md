@@ -1,4 +1,4 @@
-# NoSlop
+# NonSlop
 
 A Chrome extension that lets users flag YouTube videos as **slop**
 (low-effort / AI-generated content) and see how many other users agree.
@@ -90,7 +90,7 @@ export const FIREBASE_CONFIG = {
 1. Go to `chrome://extensions`.
 2. Enable **Developer mode** (top right).
 3. Click **Load unpacked** and select the `extension/` folder.
-4. Open any `youtube.com/watch?v=...` video — a small **NoSlop** widget
+4. Open any `youtube.com/watch?v=...` video — a small **NonSlop** widget
    appears in the bottom-right corner. Click the extension icon in the
    toolbar for the same controls in a popup.
 
