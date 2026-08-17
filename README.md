@@ -37,6 +37,13 @@ firebase/    Firestore rules + a Cloud Function for vote aggregation
   as `slopCount`. Marking a video as slop afterwards deletes that viewer's
   top-view doc, revoking the point.
 
+## Versioning
+
+`extension/manifest.json` and both `firebase/package.json` /
+`firebase/functions/package.json` are kept on the same version number, since
+a frontend release can depend on that version's Firestore rules/Cloud
+Functions being deployed. Bump all three together when either side changes.
+
 ## 1. Set up the Firebase project
 
 1. Create a project at https://console.firebase.google.com.

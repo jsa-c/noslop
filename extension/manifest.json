@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NoSlop – Mark YouTube Videos as Slop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Crowdsource a \"slop\" flag on YouTube videos. Mark low-effort/AI-generated videos and see how many other users agree.",
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
