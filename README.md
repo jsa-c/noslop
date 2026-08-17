@@ -55,8 +55,16 @@ Functions being deployed. Bump all three together when either side changes.
 
 ## 2. Deploy the backend
 
-`firebase-tools` is a local dev dependency of `firebase/`, so no global
-install is needed — everything runs through `npm run` via `npx`.
+Cloud Functions Gen2 requires the **Blaze (pay-as-you-go)** plan — upgrade
+at **Firebase Console → your project → Usage and billing → Modify plan**
+before deploying. A hobby-scale deployment still costs close to nothing;
+see "Cost controls" below.
+
+`firebase-tools` is pinned in `firebase/package.json`, but in practice
+deploys are usually driven by a globally-installed `firebase` CLI (`npm
+install -g firebase-tools`) rather than `npx` — keep that global install on
+the same major version as the pin (currently `^15`) so `firebase deploy`
+behaves the way this repo expects.
 
 ```sh
 cd firebase
@@ -65,14 +73,29 @@ npm run login            # opens a browser for firebase login
 npm run use               # pick/link your Firebase project (or edit .firebaserc by hand)
 
 cd functions && npm install && cd ..
-npm run deploy            # deploys Firestore rules + the aggregation function
+npm run deploy            # deploys Firestore rules + the aggregation functions
 ```
+
+If the first-ever Cloud Functions Gen2 deploy on a fresh project fails with
+an Eventarc/service-agent IAM error, that's a known propagation race — wait
+a few minutes and re-run `npm run deploy`.
 
 Other scripts available in `firebase/package.json`:
 
 - `npm run deploy:rules` — Firestore rules only
 - `npm run deploy:functions` — Cloud Functions only
 - `npm run emulators` — run Firestore + Functions locally for testing
+
+### Cost controls
+
+- Both functions are deployed with `maxInstances: 10` (see `MAX_INSTANCES`
+  in `firebase/functions/index.js`) so a burst of writes can't scale up
+  unboundedly.
+- Set an Artifact Registry cleanup policy on the project (container build
+  images otherwise accumulate silently): `gcloud artifacts repositories
+  set-cleanup-policies` for the `gcf-artifacts` repo, deleting images older
+  than a day or so.
+- Consider setting a budget alert in Google Cloud Billing for the project.
 
 ## 3. Configure the extension
 
@@ -97,7 +120,13 @@ export const FIREBASE_CONFIG = {
 ## Notes / next steps
 
 - Identity is anonymous-only for a frictionless MVP; votes are tied to a
-  device-local Firebase UID, not a Google account.
+  device-local Firebase UID, not a Google account. This stops one user from
+  inflating a count on a single vote document, but not someone minting many
+  anonymous UIDs and casting one vote from each — there's no per-person or
+  per-device rate limiting yet.
+- `firebase/functions/package.json` pins `engines.node`; Firebase's Node 20
+  runtime is scheduled for decommission 2026-10-30, so that pin will need to
+  move again before then or deploys will stop working.
 - Icons in `extension/icons/` are placeholder generated art — swap in real
   branding before publishing to the Chrome Web Store.
 - To publish, zip the `extension/` folder and upload it via the
