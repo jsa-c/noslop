@@ -21,6 +21,19 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['isSlop', 'votedAt', 'videoTitle']);
         allow delete: if request.auth != null && request.auth.uid == uid;
       }
+
+      // One document per unique viewer who watches 60+ seconds without ever
+      // marking the video as slop. Existence alone is the signal (no fields
+      // to tamper with), and the aggregation function counts documents into
+      // videos/{videoId}.topScore the same way votes feed slopCount.
+      match /topViews/{uid} {
+        allow read: if true;
+        allow create: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['viewedAt']);
+        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow update: if false;
+      }
     }
   }
 }

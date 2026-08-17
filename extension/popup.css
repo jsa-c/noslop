@@ -32,7 +32,8 @@ main {
   word-break: break-word;
 }
 
-.count {
+.count,
+.top {
   font-size: 13px;
 }
 
@@ -59,4 +60,22 @@ button:disabled {
 button.active {
   background: #ff4e45;
   border-color: #ff4e45;
+}
+
+#settings {
+  padding: 10px 14px 14px;
+  border-top: 1px solid #3d3d3d;
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.setting-toggle input {
+  flex: 0 0 auto;
 }

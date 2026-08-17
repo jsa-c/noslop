@@ -58,6 +58,15 @@
   color: #ccc;
 }
 
+#noslop-widget .noslop-top {
+  font-size: 12px;
+  color: #ccc;
+}
+
+#noslop-widget .noslop-top:empty {
+  display: none;
+}
+
 #noslop-widget .noslop-toggle {
   background: #272727;
   color: #fff;

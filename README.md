@@ -24,6 +24,25 @@ firebase/    Firestore rules + a Cloud Function for vote aggregation
   Toolkit + Firestore) from the background service worker — no bundler
   required, and the Web API key is safe to ship since it doesn't grant any
   access on its own (the security rules do that).
+- Optional **auto-skip**: toggle "Auto-skip videos with a high slop score"
+  in the popup and the content script will jump to the end of any video
+  whose slop score (`slopCount / totalVotes`) meets the threshold hardcoded
+  in `extension/content.js` (`AUTO_SKIP_SLOP_SCORE_THRESHOLD`, currently
+  `1` — unanimous votes only). The setting is stored in `chrome.storage.sync`.
+- **Top score**: the content script tracks real playback time (ignoring
+  seeks), and once a viewer has watched 60+ seconds of a video without ever
+  marking it as slop, it writes `videos/{videoId}/topViews/{uid}` — one doc
+  per unique viewer. A second Cloud Function aggregates those into
+  `videos/{videoId}.topScore`, the same read-only/write-via-function pattern
+  as `slopCount`. Marking a video as slop afterwards deletes that viewer's
+  top-view doc, revoking the point.
+
+## Versioning
+
+`extension/manifest.json` and both `firebase/package.json` /
+`firebase/functions/package.json` are kept on the same version number, since
+a frontend release can depend on that version's Firestore rules/Cloud
+Functions being deployed. Bump all three together when either side changes.
 
 ## 1. Set up the Firebase project
 

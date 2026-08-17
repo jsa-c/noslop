@@ -25,6 +25,7 @@ function renderVideo(videoId, videoTitle, { stats, myVote }) {
         ? `🗑️ ${stats.slopCount}/${stats.totalVotes} votes say slop (${pct}%)`
         : "No votes yet — be the first"
     }</p>
+    ${stats.topScore > 0 ? `<p class="top">⭐ ${stats.topScore} watched it through, unflagged</p>` : ""}
     <button id="toggle" class="${myVote ? "active" : ""}">${myVote ? "✓ Marked as Slop" : "Mark as Slop"}</button>
   `;
 
@@ -39,6 +40,16 @@ function renderVideo(videoId, videoTitle, { stats, myVote }) {
     } else {
       e.target.disabled = false;
     }
+  });
+}
+
+async function initSettings() {
+  const toggle = document.getElementById("auto-skip-toggle");
+  const { autoSkipEnabled } = await chrome.storage.sync.get({ autoSkipEnabled: false });
+  toggle.checked = autoSkipEnabled;
+
+  toggle.addEventListener("change", () => {
+    chrome.storage.sync.set({ autoSkipEnabled: toggle.checked });
   });
 }
 
@@ -61,3 +72,4 @@ async function init() {
 }
 
 init();
+initSettings();

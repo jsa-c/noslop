@@ -123,7 +123,11 @@ async function getVideoData(videoId) {
     firestoreGet(`videos/${videoId}/votes/${auth.uid}`, auth.idToken),
   ]);
   return {
-    stats: { slopCount: stats?.slopCount ?? 0, totalVotes: stats?.totalVotes ?? 0 },
+    stats: {
+      slopCount: stats?.slopCount ?? 0,
+      totalVotes: stats?.totalVotes ?? 0,
+      topScore: stats?.topScore ?? 0,
+    },
     myVote: myVote ? myVote.isSlop : null,
   };
 }
@@ -135,6 +139,20 @@ async function setVote(videoId, isSlop, videoTitle) {
     { isSlop, votedAt: new Date(), videoTitle: videoTitle || "" },
     auth.idToken
   );
+  if (isSlop) {
+    // Marking a video as slop revokes any top-view credit this viewer
+    // already earned for it — the badge is only for videos never marked slop.
+    await firestoreDelete(`videos/${videoId}/topViews/${auth.uid}`, auth.idToken);
+  }
+  return getVideoData(videoId);
+}
+
+// Records that this viewer watched 60+ seconds of the video without ever
+// marking it as slop. Idempotent: writing the same doc again touches no
+// count, since the aggregation function only reacts to existence changes.
+async function recordTopView(videoId) {
+  const auth = await ensureAuth();
+  await firestoreSet(`videos/${videoId}/topViews/${auth.uid}`, { viewedAt: new Date() }, auth.idToken);
   return getVideoData(videoId);
 }
 
@@ -156,6 +174,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           break;
         case "CLEAR_VOTE":
           sendResponse({ ok: true, data: await clearVote(message.videoId) });
+          break;
+        case "RECORD_TOP_VIEW":
+          sendResponse({ ok: true, data: await recordTopView(message.videoId) });
           break;
         default:
           sendResponse({ ok: false, error: `Unknown message type: ${message.type}` });

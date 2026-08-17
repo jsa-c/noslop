@@ -29,3 +29,23 @@ exports.onVoteWritten = onDocumentWritten("videos/{videoId}/votes/{uid}", async 
 
   await videoRef.set(update, { merge: true });
 });
+
+// Clients can only create/delete their own top-view document at
+// videos/{videoId}/topViews/{uid} (the extension writes one after 60s of
+// watch time, and revokes it if that same user later marks the video as
+// slop). This trigger is the sole writer of topScore, so the count can only
+// ever reflect real unique viewers.
+exports.onTopViewWritten = onDocumentWritten("videos/{videoId}/topViews/{uid}", async (event) => {
+  const { videoId } = event.params;
+  const before = event.data.before.exists;
+  const after = event.data.after.exists;
+
+  const delta = (after ? 1 : 0) - (before ? 1 : 0);
+  if (delta === 0) return;
+
+  const videoRef = db.collection("videos").doc(videoId);
+  await videoRef.set(
+    { topScore: FieldValue.increment(delta), lastUpdated: FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+});
