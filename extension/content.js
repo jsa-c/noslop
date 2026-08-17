@@ -34,7 +34,7 @@ function ensureWidget() {
   widget.id = WIDGET_ID;
   widget.innerHTML = `
     <div class="noslop-header">
-      <span class="noslop-title">NoSlop</span>
+      <span class="noslop-title">NonSlop</span>
       <button class="noslop-collapse" title="Minimize" aria-label="Minimize">–</button>
     </div>
     <div class="noslop-body">
@@ -146,7 +146,7 @@ async function loadForCurrentVideo() {
 
   const res = await chrome.runtime.sendMessage({ type: "GET_VIDEO_DATA", videoId });
   if (!res?.ok) {
-    widget.querySelector(".noslop-count").textContent = "Couldn't load NoSlop data";
+    widget.querySelector(".noslop-count").textContent = "Couldn't load NonSlop data";
     return;
   }
   if (videoId !== currentVideoId) return; // navigated away while loading

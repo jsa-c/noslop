@@ -65,7 +65,7 @@ async function init() {
   const videoTitle = (tab.title || "").replace(/ - YouTube$/, "");
   const res = await chrome.runtime.sendMessage({ type: "GET_VIDEO_DATA", videoId });
   if (!res?.ok) {
-    content.innerHTML = `<p id="status">Couldn't load NoSlop data. Is the extension configured? See README.</p>`;
+    content.innerHTML = `<p id="status">Couldn't load NonSlop data. Is the extension configured? See README.</p>`;
     return;
   }
   renderVideo(videoId, videoTitle, res.data);
