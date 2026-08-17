@@ -11,6 +11,12 @@ let currentVideoId = null;
 // below, a video where every voter agrees it's slop gets auto-skipped.
 const AUTO_SKIP_SLOP_SCORE_THRESHOLD = 1;
 
+// Watching this many seconds without ever marking the video as slop earns
+// it one unique-viewer "top" point (videos/{videoId}.topScore).
+const TOP_VIEW_WATCH_SECONDS_THRESHOLD = 60;
+
+let watchState = null; // { videoId, video, listener, watchedSeconds, lastTime, myVote, recorded }
+
 function getVideoId() {
   const params = new URLSearchParams(location.search);
   return params.get("v");
@@ -33,6 +39,7 @@ function ensureWidget() {
     </div>
     <div class="noslop-body">
       <div class="noslop-count">Loading…</div>
+      <div class="noslop-top"></div>
       <button class="noslop-toggle" disabled>Mark as Slop</button>
     </div>
   `;
@@ -71,9 +78,42 @@ function skipVideo() {
   }
 }
 
+// Accumulates real playback time (ignoring seeks/jumps) and, once it
+// crosses the threshold, records a unique top view — unless this viewer has
+// marked the video as slop in the meantime.
+function onWatchTimeUpdate(state) {
+  if (state.recorded || state.myVote === true) return;
+
+  const t = state.video.currentTime;
+  const delta = t - state.lastTime;
+  if (delta > 0 && delta < 1.5) state.watchedSeconds += delta;
+  state.lastTime = t;
+
+  if (state.watchedSeconds >= TOP_VIEW_WATCH_SECONDS_THRESHOLD) {
+    state.recorded = true;
+    chrome.runtime.sendMessage({ type: "RECORD_TOP_VIEW", videoId: state.videoId });
+  }
+}
+
+function resetWatchTracking(videoId, myVote) {
+  if (watchState) {
+    watchState.video.removeEventListener("timeupdate", watchState.listener);
+    watchState = null;
+  }
+
+  const video = document.querySelector("video");
+  if (!video) return;
+
+  const state = { videoId, video, watchedSeconds: 0, lastTime: video.currentTime, myVote, recorded: false };
+  state.listener = () => onWatchTimeUpdate(state);
+  video.addEventListener("timeupdate", state.listener);
+  watchState = state;
+}
+
 function render(widget, { stats, myVote }, videoId, { skipped = false } = {}) {
   if (videoId !== currentVideoId) return; // stale response from a previous video
   const countEl = widget.querySelector(".noslop-count");
+  const topEl = widget.querySelector(".noslop-top");
   const toggleEl = widget.querySelector(".noslop-toggle");
 
   const pct = stats.totalVotes > 0 ? Math.round((stats.slopCount / stats.totalVotes) * 100) : 0;
@@ -82,6 +122,8 @@ function render(widget, { stats, myVote }, videoId, { skipped = false } = {}) {
     : stats.totalVotes > 0
       ? `🗑️ ${stats.slopCount}/${stats.totalVotes} votes say slop (${pct}%)`
       : "No votes yet — be the first";
+
+  topEl.textContent = stats.topScore > 0 ? `⭐ ${stats.topScore} watched it through, unflagged` : "";
 
   toggleEl.disabled = false;
   if (myVote === true) {
@@ -117,6 +159,7 @@ async function loadForCurrentVideo() {
     return;
   }
 
+  resetWatchTracking(videoId, res.data.myVote);
   render(widget, res.data, videoId);
 }
 
@@ -134,6 +177,7 @@ async function onToggleClick(event) {
 
   const res = await chrome.runtime.sendMessage(message);
   if (res?.ok) {
+    if (watchState?.videoId === videoId) watchState.myVote = res.data.myVote;
     render(widget, res.data, videoId);
   } else {
     toggleEl.disabled = false;

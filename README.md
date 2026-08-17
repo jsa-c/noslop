@@ -29,6 +29,13 @@ firebase/    Firestore rules + a Cloud Function for vote aggregation
   whose slop score (`slopCount / totalVotes`) meets the threshold hardcoded
   in `extension/content.js` (`AUTO_SKIP_SLOP_SCORE_THRESHOLD`, currently
   `1` — unanimous votes only). The setting is stored in `chrome.storage.sync`.
+- **Top score**: the content script tracks real playback time (ignoring
+  seeks), and once a viewer has watched 60+ seconds of a video without ever
+  marking it as slop, it writes `videos/{videoId}/topViews/{uid}` — one doc
+  per unique viewer. A second Cloud Function aggregates those into
+  `videos/{videoId}.topScore`, the same read-only/write-via-function pattern
+  as `slopCount`. Marking a video as slop afterwards deletes that viewer's
+  top-view doc, revoking the point.
 
 ## 1. Set up the Firebase project
 

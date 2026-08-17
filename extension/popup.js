@@ -25,6 +25,7 @@ function renderVideo(videoId, videoTitle, { stats, myVote }) {
         ? `🗑️ ${stats.slopCount}/${stats.totalVotes} votes say slop (${pct}%)`
         : "No votes yet — be the first"
     }</p>
+    ${stats.topScore > 0 ? `<p class="top">⭐ ${stats.topScore} watched it through, unflagged</p>` : ""}
     <button id="toggle" class="${myVote ? "active" : ""}">${myVote ? "✓ Marked as Slop" : "Mark as Slop"}</button>
   `;
 

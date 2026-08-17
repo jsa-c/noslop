@@ -32,7 +32,8 @@ main {
   word-break: break-word;
 }
 
-.count {
+.count,
+.top {
   font-size: 13px;
 }
 
