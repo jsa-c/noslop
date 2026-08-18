@@ -92,3 +92,79 @@
   border-color: #ff4e45;
   color: #fff;
 }
+
+/* Banner across the top of the page when a video gets auto-skipped. */
+#noslop-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 2147483647;
+  max-width: min(90vw, 520px);
+  transform: translate(-50%, -12px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  background: #212121;
+  color: #fff;
+  border: 1px solid #3d3d3d;
+  border-left: 4px solid #ff4e45;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+#noslop-toast.noslop-toast-visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+/* Slop / Not Slop buttons inserted next to YouTube's like/dislike row. */
+#noslop-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  font-family: Roboto, Arial, sans-serif;
+}
+
+#noslop-inline .noslop-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 18px;
+  border: 1px solid #3d3d3d;
+  background: #272727;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#noslop-inline .noslop-inline-btn:hover:not(:disabled) {
+  background: #3d3d3d;
+}
+
+#noslop-inline .noslop-inline-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#noslop-inline .noslop-inline-slop.noslop-inline-active {
+  background: #ff4e45;
+  border-color: #ff4e45;
+  color: #fff;
+}
+
+#noslop-inline .noslop-inline-noslop.noslop-inline-active {
+  background: #3ea6ff;
+  border-color: #3ea6ff;
+  color: #0f0f0f;
+}
