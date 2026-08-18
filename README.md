@@ -36,15 +36,21 @@ firebase/    Firestore rules + a Cloud Function for vote aggregation
   high slop score" in the popup and any video whose slop score
   (`slopCount / totalVotes`) meets the threshold hardcoded in
   `extension/content.js` (`AUTO_SKIP_SLOP_SCORE_THRESHOLD`, currently `1` —
-  unanimous votes only) gets seeked to `AUTO_SKIP_COUNTDOWN_SECONDS` (3)
-  before the end rather than jumped past outright. Those last seconds play
-  out while a toast at the top of the page names the slop score, drains a
-  progress bar, and offers **Keep watching (Ns)**. Do nothing and the video
-  ends on its own, handing off to YouTube's "up next" autoplay; hit the
-  button and playback returns to exactly where the skip interrupted you,
-  with auto-skip disarmed for the rest of that video. The bar is driven off
-  real playback position rather than wall clock, so pausing mid-countdown
-  pauses the countdown. The setting is stored in `chrome.storage.sync`.
+  unanimous votes only) gets a short grace period before it's skipped. The
+  video keeps playing where it is while a toast at the top of the page names
+  the slop score, drains a progress bar over
+  `AUTO_SKIP_COUNTDOWN_SECONDS` (2), and offers **Keep watching (Ns)**:
+  - Do nothing and the skip fires — the playhead jumps to
+    `AUTO_SKIP_END_MARGIN_SECONDS` (1) before the end so the video finishes
+    and YouTube's "up next" autoplay moves on. (Seeking exactly to
+    `duration` can leave the player parked on the final frame instead.)
+  - Hit the button and the skip is called off, disarmed for the rest of that
+    video. The playhead never moved, so nothing needs restoring.
+
+  The countdown is wall-clock but freezes while the video is paused — a
+  paused video isn't slop anyone is sitting through. The grace period is
+  deliberately short, since it's time spent watching a video the community
+  has flagged. The setting is stored in `chrome.storage.sync`.
 - **Top score**: the content script tracks real playback time (ignoring
   seeks), and once a viewer has watched 60+ seconds of a video without ever
   marking it as slop, it writes `videos/{videoId}/topViews/{uid}` — one doc

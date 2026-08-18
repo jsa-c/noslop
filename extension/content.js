@@ -25,15 +25,20 @@ const AUTO_SKIP_SLOP_SCORE_THRESHOLD = 1;
 // it one unique-viewer "top" point (videos/{videoId}.topScore).
 const TOP_VIEW_WATCH_SECONDS_THRESHOLD = 60;
 
-// An auto-skip seeks to this many seconds before the end rather than jumping
-// straight past the video. Those remaining seconds are the viewer's window to
-// cancel, counted down by the toast's progress bar.
-const AUTO_SKIP_COUNTDOWN_SECONDS = 3;
+// Grace period before an auto-skip actually fires. The video keeps playing
+// where it is while the toast counts this down, so the viewer can call the
+// skip off. Kept short — it's time spent watching a video we believe is slop.
+const AUTO_SKIP_COUNTDOWN_SECONDS = 2;
+
+// An auto-skip stops this far short of the end rather than seeking exactly to
+// `duration`, which can leave the player parked on the final frame instead of
+// handing off to YouTube's "up next" autoplay.
+const AUTO_SKIP_END_MARGIN_SECONDS = 1;
 
 let watchState = null; // { videoId, video, listener, watchedSeconds, lastTime, myVote, recorded }
 let inlineRetryTimer = null;
 
-// Live auto-skip countdown: { videoId, video, resumeTime, raf, bar, label }.
+// Live auto-skip countdown: { videoId, video, raf, remaining, lastFrame, bar, label }.
 let countdown = null;
 // Set when the viewer hits "Keep watching", so re-renders (e.g. after voting)
 // don't immediately restart the skip. Reset on every navigation.
@@ -120,85 +125,89 @@ function stopCountdown() {
   countdown = null;
 }
 
-// Rather than jumping the viewer straight past a slop video, seek to
-// AUTO_SKIP_COUNTDOWN_SECONDS before the end and let those last seconds play
-// out. The toast counts them down and offers a way out; if the viewer does
-// nothing the video simply ends and YouTube's "up next" autoplay takes over.
-// (Seeking exactly to `duration` can leave the player parked on the final
-// frame instead of advancing, which is the other reason to stop short.)
+// Warn before skipping rather than yanking the video away. The video keeps
+// playing where it is; the toast counts down AUTO_SKIP_COUNTDOWN_SECONDS and
+// offers a way out. If the viewer does nothing, performSkip() runs.
 function beginSkipCountdown(videoId, stats) {
   const video = document.querySelector("video");
   if (!video) return;
-  // Already counting down for this video — leave it alone. Restarting would
-  // re-capture resumeTime at the near-the-end position we just seeked to,
-  // making "Keep watching" a no-op. (Voting mid-countdown re-enters here.)
+  // Already counting down for this video — leave it alone rather than
+  // restarting (and so extending) the grace period. Voting mid-countdown
+  // re-enters here via applyVideoData().
   if (countdown?.videoId === videoId) return;
 
-  const start = () => {
-    if (videoId !== currentVideoId || skipCancelled || !isFinite(video.duration)) return;
-    if (countdown?.videoId === videoId) return;
+  const toast = ensureToast();
+  const pct = stats.totalVotes > 0 ? Math.round((stats.slopCount / stats.totalVotes) * 100) : 0;
+  toast.querySelector(".noslop-toast-text").textContent =
+    `🗑️ This video is sloppy — ${pct}% of ${stats.totalVotes} votes say slop.`;
 
-    const resumeTime = video.currentTime;
-    const target = Math.max(0, video.duration - AUTO_SKIP_COUNTDOWN_SECONDS);
-    // Never yank someone backwards if they're already inside the window.
-    if (video.currentTime < target) video.currentTime = target;
+  // Re-trigger the entrance transition even if a toast is already showing.
+  toast.classList.remove("noslop-toast-visible");
+  void toast.offsetWidth;
+  toast.classList.add("noslop-toast-visible");
 
-    const toast = ensureToast();
-    const pct = stats.totalVotes > 0 ? Math.round((stats.slopCount / stats.totalVotes) * 100) : 0;
-    toast.querySelector(".noslop-toast-text").textContent =
-      `🗑️ This video is sloppy — ${pct}% of ${stats.totalVotes} votes say slop.`;
-
-    // Re-trigger the entrance transition even if a toast is already showing.
-    toast.classList.remove("noslop-toast-visible");
-    void toast.offsetWidth;
-    toast.classList.add("noslop-toast-visible");
-
-    stopCountdown();
-    countdown = {
-      videoId,
-      video,
-      resumeTime,
-      raf: 0,
-      bar: toast.querySelector(".noslop-toast-bar"),
-      label: toast.querySelector(".noslop-toast-cancel"),
-    };
-    tickCountdown();
+  stopCountdown();
+  countdown = {
+    videoId,
+    video,
+    raf: 0,
+    remaining: AUTO_SKIP_COUNTDOWN_SECONDS,
+    lastFrame: performance.now(),
+    bar: toast.querySelector(".noslop-toast-bar"),
+    label: toast.querySelector(".noslop-toast-cancel"),
   };
-
-  if (video.readyState >= 1 && isFinite(video.duration)) start();
-  else video.addEventListener("loadedmetadata", start, { once: true });
+  renderCountdown();
+  countdown.raf = requestAnimationFrame(tickCountdown);
 }
 
-// Drives the draining bar off actual playback position rather than wall
-// clock, so pausing or scrubbing during the window behaves sensibly.
-function tickCountdown() {
+function renderCountdown() {
+  const { remaining, bar, label } = countdown;
+  bar.style.width = `${Math.max(0, Math.min(1, remaining / AUTO_SKIP_COUNTDOWN_SECONDS)) * 100}%`;
+  label.textContent = `Keep watching (${Math.max(0, Math.ceil(remaining))}s)`;
+}
+
+// Wall-clock countdown, but frozen while the video is paused: a paused video
+// isn't slop anyone is sitting through, so there's nothing to rescue them
+// from until playback resumes.
+function tickCountdown(now) {
   if (!countdown || countdown.videoId !== currentVideoId) return;
 
-  const { video, bar } = countdown;
-  const remaining = Math.max(0, video.duration - video.currentTime);
-  const fraction = Math.max(0, Math.min(1, remaining / AUTO_SKIP_COUNTDOWN_SECONDS));
-  bar.style.width = `${fraction * 100}%`;
-  countdown.label.textContent = `Keep watching (${Math.ceil(remaining)}s)`;
+  const elapsed = (now - countdown.lastFrame) / 1000;
+  countdown.lastFrame = now;
+  if (!countdown.video.paused) countdown.remaining -= elapsed;
 
-  if (remaining > 0.05) {
+  renderCountdown();
+
+  if (countdown.remaining > 0) {
     countdown.raf = requestAnimationFrame(tickCountdown);
   } else {
-    // Video is about to end on its own; get out of autoplay's way.
-    stopCountdown();
-    hideToast();
+    performSkip();
   }
 }
 
-// "Keep watching": put the viewer back where the skip interrupted them and
-// don't re-arm for this video.
+// Jump to just short of the end so the video finishes and YouTube's "up
+// next" autoplay moves on.
+function performSkip() {
+  const { video } = countdown;
+  stopCountdown();
+  hideToast();
+
+  const jumpNearEnd = () => {
+    if (!isFinite(video.duration)) return;
+    video.currentTime = Math.max(0, video.duration - AUTO_SKIP_END_MARGIN_SECONDS);
+  };
+  if (video.readyState >= 1 && isFinite(video.duration)) jumpNearEnd();
+  else video.addEventListener("loadedmetadata", jumpNearEnd, { once: true });
+}
+
+// "Keep watching": call the skip off and don't re-arm it for this video. The
+// playhead never moved, so there's nothing to restore.
 function cancelSkip() {
   if (!countdown) return;
-  const { video, resumeTime } = countdown;
 
   skipCancelled = true;
   stopCountdown();
   hideToast();
-  video.currentTime = resumeTime;
 
   if (lastVideoData && currentVideoId) {
     render(ensureWidget(), lastVideoData, currentVideoId);
