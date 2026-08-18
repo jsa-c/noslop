@@ -43,6 +43,24 @@ function renderVideo(videoId, videoTitle, { stats, myVote }) {
   });
 }
 
+function renderSignedOut() {
+  content.innerHTML = `<p id="status">Sign in with Google (below) to see and flag slop.</p>`;
+}
+
+async function renderAuthControl() {
+  const authControl = document.getElementById("auth-control");
+  const res = await chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" });
+  const signedIn = !!res?.signedIn;
+
+  authControl.innerHTML = `<button id="auth-btn" type="button">${signedIn ? "Sign out" : "Sign in with Google"}</button>`;
+  document.getElementById("auth-btn").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    await chrome.runtime.sendMessage({ type: signedIn ? "SIGN_OUT" : "SIGN_IN" });
+    await renderAuthControl();
+    await init();
+  });
+}
+
 async function initSettings() {
   const toggle = document.getElementById("auto-skip-toggle");
   const { autoSkipEnabled } = await chrome.storage.sync.get({ autoSkipEnabled: false });
@@ -51,6 +69,8 @@ async function initSettings() {
   toggle.addEventListener("change", () => {
     chrome.storage.sync.set({ autoSkipEnabled: toggle.checked });
   });
+
+  await renderAuthControl();
 }
 
 async function init() {
@@ -66,6 +86,10 @@ async function init() {
   const res = await chrome.runtime.sendMessage({ type: "GET_VIDEO_DATA", videoId });
   if (!res?.ok) {
     content.innerHTML = `<p id="status">Couldn't load NonSlop data. Is the extension configured? See README.</p>`;
+    return;
+  }
+  if (!res.signedIn) {
+    renderSignedOut();
     return;
   }
   renderVideo(videoId, videoTitle, res.data);
