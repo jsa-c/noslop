@@ -65,6 +65,13 @@ button.active {
 #settings {
   padding: 10px 14px 14px;
   border-top: 1px solid #3d3d3d;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#auth-control button {
+  width: 100%;
 }
 
 .setting-toggle {

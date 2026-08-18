@@ -1,8 +1,8 @@
 {
   "name": "noslop-firebase",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "private": true,
-  "description": "Firebase CLI project config for NoSlop (Firestore rules + Cloud Functions).",
+  "description": "Firebase CLI project config for NonSlop (Firestore rules + Cloud Functions).",
   "scripts": {
     "login": "firebase login",
     "use": "firebase use --add",
@@ -12,6 +12,6 @@
     "emulators": "firebase emulators:start --only firestore,functions"
   },
   "devDependencies": {
-    "firebase-tools": "^13.0.0"
+    "firebase-tools": "^15.0.0"
   }
 }

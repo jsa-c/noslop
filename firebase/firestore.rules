@@ -3,6 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isGoogleUser(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
     // Aggregate stats per video. Publicly readable so anyone can see the
     // slop score without signing in. Only the Cloud Function (Admin SDK,
     // which bypasses rules) is allowed to write these — clients can never
@@ -11,15 +17,16 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
 
-      // One vote document per authenticated (anonymous) user per video.
+      // One vote document per user per video, and only for users who
+      // signed in with Google — the extension no longer supports anonymous
+      // auth, and this is the server-side backstop for that requirement.
       // Users may only read/write their own vote.
       match /votes/{uid} {
         allow read: if true;
-        allow create, update: if request.auth != null
-          && request.auth.uid == uid
+        allow create, update: if isGoogleUser(uid)
           && request.resource.data.isSlop is bool
           && request.resource.data.keys().hasOnly(['isSlop', 'votedAt', 'videoTitle']);
-        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow delete: if isGoogleUser(uid);
       }
 
       // One document per unique viewer who watches 60+ seconds without ever
@@ -28,10 +35,8 @@ service cloud.firestore {
       // videos/{videoId}.topScore the same way votes feed slopCount.
       match /topViews/{uid} {
         allow read: if true;
-        allow create: if request.auth != null
-          && request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['viewedAt']);
-        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow create: if isGoogleUser(uid) && request.resource.data.keys().hasOnly(['viewedAt']);
+        allow delete: if isGoogleUser(uid);
         allow update: if false;
       }
     }
