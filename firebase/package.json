@@ -1,6 +1,6 @@
 {
   "name": "noslop-firebase",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Firebase CLI project config for NonSlop (Firestore rules + Cloud Functions).",
   "scripts": {

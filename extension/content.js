@@ -25,12 +25,22 @@ const AUTO_SKIP_SLOP_SCORE_THRESHOLD = 1;
 // it one unique-viewer "top" point (videos/{videoId}.topScore).
 const TOP_VIEW_WATCH_SECONDS_THRESHOLD = 60;
 
-// How long the auto-skip toast stays on screen.
-const TOAST_VISIBLE_MS = 5000;
+// An auto-skip seeks to this many seconds before the end rather than jumping
+// straight past the video. Those remaining seconds are the viewer's window to
+// cancel, counted down by the toast's progress bar.
+const AUTO_SKIP_COUNTDOWN_SECONDS = 3;
 
 let watchState = null; // { videoId, video, listener, watchedSeconds, lastTime, myVote, recorded }
 let inlineRetryTimer = null;
-let toastHideTimer = null;
+
+// Live auto-skip countdown: { videoId, video, resumeTime, raf, bar, label }.
+let countdown = null;
+// Set when the viewer hits "Keep watching", so re-renders (e.g. after voting)
+// don't immediately restart the skip. Reset on every navigation.
+let skipCancelled = false;
+// Most recent payload for the current video, so cancelling can restore the
+// widget to its normal (non-skipping) rendering.
+let lastVideoData = null;
 
 function getVideoId() {
   const params = new URLSearchParams(location.search);
@@ -81,43 +91,118 @@ async function isAutoSkipEnabled() {
   return autoSkipEnabled;
 }
 
-// Jumps to one second before the end so YouTube's own "up next" handling
-// takes over, rather than trying to drive YouTube's next-video button
-// directly. Seeking exactly to `duration` can leave the player parked on the
-// final frame instead of advancing, so stop just short of it.
-function skipVideo() {
+function ensureToast() {
+  let toast = document.getElementById(TOAST_ID);
+  if (toast) return toast;
+
+  toast = document.createElement("div");
+  toast.id = TOAST_ID;
+  toast.setAttribute("role", "status");
+  toast.innerHTML = `
+    <div class="noslop-toast-row">
+      <span class="noslop-toast-text"></span>
+      <button type="button" class="noslop-toast-cancel">Keep watching</button>
+    </div>
+    <div class="noslop-toast-track"><div class="noslop-toast-bar"></div></div>
+  `;
+  toast.querySelector(".noslop-toast-cancel").addEventListener("click", cancelSkip);
+  document.body.appendChild(toast);
+  return toast;
+}
+
+function hideToast() {
+  document.getElementById(TOAST_ID)?.classList.remove("noslop-toast-visible");
+}
+
+function stopCountdown() {
+  if (!countdown) return;
+  cancelAnimationFrame(countdown.raf);
+  countdown = null;
+}
+
+// Rather than jumping the viewer straight past a slop video, seek to
+// AUTO_SKIP_COUNTDOWN_SECONDS before the end and let those last seconds play
+// out. The toast counts them down and offers a way out; if the viewer does
+// nothing the video simply ends and YouTube's "up next" autoplay takes over.
+// (Seeking exactly to `duration` can leave the player parked on the final
+// frame instead of advancing, which is the other reason to stop short.)
+function beginSkipCountdown(videoId, stats) {
   const video = document.querySelector("video");
   if (!video) return;
-  const jumpNearEnd = () => {
-    video.currentTime = Math.max(0, video.duration - 1);
+  // Already counting down for this video — leave it alone. Restarting would
+  // re-capture resumeTime at the near-the-end position we just seeked to,
+  // making "Keep watching" a no-op. (Voting mid-countdown re-enters here.)
+  if (countdown?.videoId === videoId) return;
+
+  const start = () => {
+    if (videoId !== currentVideoId || skipCancelled || !isFinite(video.duration)) return;
+    if (countdown?.videoId === videoId) return;
+
+    const resumeTime = video.currentTime;
+    const target = Math.max(0, video.duration - AUTO_SKIP_COUNTDOWN_SECONDS);
+    // Never yank someone backwards if they're already inside the window.
+    if (video.currentTime < target) video.currentTime = target;
+
+    const toast = ensureToast();
+    const pct = stats.totalVotes > 0 ? Math.round((stats.slopCount / stats.totalVotes) * 100) : 0;
+    toast.querySelector(".noslop-toast-text").textContent =
+      `🗑️ This video is sloppy — ${pct}% of ${stats.totalVotes} votes say slop.`;
+
+    // Re-trigger the entrance transition even if a toast is already showing.
+    toast.classList.remove("noslop-toast-visible");
+    void toast.offsetWidth;
+    toast.classList.add("noslop-toast-visible");
+
+    stopCountdown();
+    countdown = {
+      videoId,
+      video,
+      resumeTime,
+      raf: 0,
+      bar: toast.querySelector(".noslop-toast-bar"),
+      label: toast.querySelector(".noslop-toast-cancel"),
+    };
+    tickCountdown();
   };
-  if (video.readyState >= 1 && isFinite(video.duration)) {
-    jumpNearEnd();
+
+  if (video.readyState >= 1 && isFinite(video.duration)) start();
+  else video.addEventListener("loadedmetadata", start, { once: true });
+}
+
+// Drives the draining bar off actual playback position rather than wall
+// clock, so pausing or scrubbing during the window behaves sensibly.
+function tickCountdown() {
+  if (!countdown || countdown.videoId !== currentVideoId) return;
+
+  const { video, bar } = countdown;
+  const remaining = Math.max(0, video.duration - video.currentTime);
+  const fraction = Math.max(0, Math.min(1, remaining / AUTO_SKIP_COUNTDOWN_SECONDS));
+  bar.style.width = `${fraction * 100}%`;
+  countdown.label.textContent = `Keep watching (${Math.ceil(remaining)}s)`;
+
+  if (remaining > 0.05) {
+    countdown.raf = requestAnimationFrame(tickCountdown);
   } else {
-    video.addEventListener("loadedmetadata", jumpNearEnd, { once: true });
+    // Video is about to end on its own; get out of autoplay's way.
+    stopCountdown();
+    hideToast();
   }
 }
 
-// Banner across the top of the page explaining why the video just jumped.
-function showSkipToast(stats) {
-  let toast = document.getElementById(TOAST_ID);
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = TOAST_ID;
-    toast.setAttribute("role", "status");
-    document.body.appendChild(toast);
+// "Keep watching": put the viewer back where the skip interrupted them and
+// don't re-arm for this video.
+function cancelSkip() {
+  if (!countdown) return;
+  const { video, resumeTime } = countdown;
+
+  skipCancelled = true;
+  stopCountdown();
+  hideToast();
+  video.currentTime = resumeTime;
+
+  if (lastVideoData && currentVideoId) {
+    render(ensureWidget(), lastVideoData, currentVideoId);
   }
-
-  const pct = stats.totalVotes > 0 ? Math.round((stats.slopCount / stats.totalVotes) * 100) : 0;
-  toast.textContent = `🗑️ This video is sloppy — ${pct}% of ${stats.totalVotes} votes say slop. Skipping…`;
-
-  // Re-trigger the entrance transition even if a toast is already showing.
-  toast.classList.remove("noslop-toast-visible");
-  void toast.offsetWidth;
-  toast.classList.add("noslop-toast-visible");
-
-  clearTimeout(toastHideTimer);
-  toastHideTimer = setTimeout(() => toast.classList.remove("noslop-toast-visible"), TOAST_VISIBLE_MS);
 }
 
 // YouTube's like/dislike markup has been reshuffled more than once, so try a
@@ -226,15 +311,15 @@ function resetWatchTracking(videoId, myVote) {
   watchState = state;
 }
 
-function render(widget, { stats, myVote }, videoId, { skipped = false } = {}) {
+function render(widget, { stats, myVote }, videoId, { skipping = false } = {}) {
   if (videoId !== currentVideoId) return; // stale response from a previous video
   const countEl = widget.querySelector(".noslop-count");
   const topEl = widget.querySelector(".noslop-top");
   const toggleEl = widget.querySelector(".noslop-toggle");
 
   const pct = stats.totalVotes > 0 ? Math.round((stats.slopCount / stats.totalVotes) * 100) : 0;
-  countEl.textContent = skipped
-    ? `⏭️ Auto-skipped — ${pct}% of ${stats.totalVotes} votes say slop`
+  countEl.textContent = skipping
+    ? `⏭️ Skipping — ${pct}% of ${stats.totalVotes} votes say slop`
     : stats.totalVotes > 0
       ? `🗑️ ${stats.slopCount}/${stats.totalVotes} votes say slop (${pct}%)`
       : "No votes yet — be the first";
@@ -258,14 +343,20 @@ function render(widget, { stats, myVote }, videoId, { skipped = false } = {}) {
 // voting doesn't zero out progress toward the top-score threshold).
 async function applyVideoData(widget, videoId, data, { freshLoad = false } = {}) {
   currentMyVote = data.myVote;
+  lastVideoData = data;
 
-  const shouldSkip = getSlopScore(data.stats) >= AUTO_SKIP_SLOP_SCORE_THRESHOLD && (await isAutoSkipEnabled());
+  const shouldSkip =
+    !skipCancelled &&
+    getSlopScore(data.stats) >= AUTO_SKIP_SLOP_SCORE_THRESHOLD &&
+    (await isAutoSkipEnabled());
   if (videoId !== currentVideoId) return;
 
   if (shouldSkip) {
-    skipVideo();
-    showSkipToast(data.stats);
-    render(widget, data, videoId, { skipped: true });
+    // Watch-time tracking still resets, so cancelling mid-countdown leaves a
+    // sane baseline for the top-score threshold.
+    if (freshLoad) resetWatchTracking(videoId, data.myVote);
+    beginSkipCountdown(videoId, data.stats);
+    render(widget, data, videoId, { skipping: true });
   } else {
     if (freshLoad) resetWatchTracking(videoId, data.myVote);
     else if (watchState?.videoId === videoId) watchState.myVote = data.myVote;
@@ -299,6 +390,10 @@ async function loadForCurrentVideo() {
   const videoId = getVideoId();
   currentVideoId = videoId;
   currentMyVote = null;
+  lastVideoData = null;
+  skipCancelled = false;
+  stopCountdown();
+  hideToast();
   if (!videoId) return;
 
   const widget = ensureWidget();
